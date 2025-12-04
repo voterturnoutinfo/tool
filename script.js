@@ -69,13 +69,18 @@ function getTurnoutChange(fipsCode, currentYear, previousYear) {
     const currentTurnout = currentRecord.VOTER_TURNOUT_PCT;
     const previousTurnout = previousRecord.VOTER_TURNOUT_PCT;
 
+    // Check if either value is invalid (0, null, or undefined)
+    if (!currentTurnout || currentTurnout <= 0 || !previousTurnout || previousTurnout <= 0) {
+        return null;
+    }
+
     // Return the change in percentage points (e.g., 0.61 - 0.59 = 0.02)
     return currentTurnout - previousTurnout;
 }
 
 // --- Helper function to get color based on turnout change ---
 function getChangeColor(change) {
-    if (change === null) return '#c0d8c1'; // Default for no data
+    if (change === null) return '#d3d3d3'; // Gray for N/A (no data)
 
     // Convert change to percentage points
     const changePercent = change * 100;
@@ -144,6 +149,24 @@ function initMap() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(mainMap);
+
+    // Add SVG pattern for N/A counties (diagonal stripes)
+    const svgPattern = `
+        <svg width="0" height="0">
+            <defs>
+                <pattern id="diagonalStripes" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="8" stroke="#999" stroke-width="4"/>
+                </pattern>
+            </defs>
+        </svg>
+    `;
+    
+    const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgElement.innerHTML = svgPattern;
+    svgElement.style.position = 'absolute';
+    svgElement.style.width = '0';
+    svgElement.style.height = '0';
+    document.body.appendChild(svgElement);
 
     mapInitialized = true;
     
@@ -255,13 +278,16 @@ function updateMap() {
                 const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
                 const change = getTurnoutChange(fipsCode, currentYear, previousYear); 
                 const isSelected = fipsCode === selectedCountyFIPS;
+                const isNA = change === null;
 
                 return {
-                    fillColor: getChangeColor(change),
+                    fillColor: isNA ? '#d3d3d3' : getChangeColor(change),
+                    fillPattern: isNA ? 'url(#diagonalStripes)' : undefined,
                     weight: isSelected ? 3 : 0.5,
                     opacity: 1,
                     color: isSelected ? '#ffff00' : 'white',
-                    fillOpacity: 0.7
+                    fillOpacity: 0.7,
+                    className: isNA ? 'na-county' : ''
                 };
             },
             onEachFeature: function(feature, layer) {
@@ -276,13 +302,23 @@ function updateMap() {
 
                 // Tooltip with county and state
                 layer.bindTooltip(
-                    `${feature.properties.NAME} County, ${stateName}<br>` +
-                    `Turnout Change (${previousYear} to ${currentYear}): ${changeText}`
+                    `<strong>${feature.properties.NAME} County, ${stateName}</strong><br>` +
+                    `Change (${previousYear} → ${currentYear}): <strong>${changeText}</strong>`
                 );
 
                 layer.on('click', function() {
                     highlightCounty(fipsCode);
                 });
+                
+                // Add striped pattern for N/A counties
+                if (change === null) {
+                    layer.on('add', function() {
+                        const path = layer.getElement();
+                        if (path) {
+                            path.style.fill = 'url(#diagonalStripes)';
+                        }
+                    });
+                }
             }
         }).addTo(mainMap);
     }, 100); // Debounce by 100ms
