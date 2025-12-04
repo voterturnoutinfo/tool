@@ -90,7 +90,6 @@ function getChangeColor(change) {
     return '#a50f15'; // Strong Decrease
 }
 
-// Fetch all data with optimized compressed files
 async function fetchData() {
     try {
         // Show loading indicator
@@ -181,11 +180,11 @@ function displayCountyInfo(fipsCode) {
     
     const stateName = stateNames[stateFP] || 'Unknown';
     
-    const currentTurnout = currentRecord ? (currentRecord.VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
-    const currentRegTurnout = currentRecord ? (currentRecord.REG_VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const currentTurnout = currentRecord ? (currentRecord.VOTER_TURNOUT_PCT > 0 ? (currentRecord.VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A') : 'N/A';
+    const currentRegTurnout = currentRecord ? (currentRecord.REG_VOTER_TURNOUT_PCT > 0 ? (currentRecord.REG_VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A') : 'N/A';
     const currentRegPct = currentRecord ? (currentRecord.REG_VOTERS_PCT * 100).toFixed(2) + '%' : 'N/A';
-    const previousTurnout = previousRecord ? (previousRecord.VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
-    const previousRegTurnout = previousRecord ? (previousRecord.REG_VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const previousTurnout = previousRecord ? (previousRecord.VOTER_TURNOUT_PCT > 0 ? (previousRecord.VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A') : 'N/A';
+    const previousRegTurnout = previousRecord ? (previousRecord.REG_VOTER_TURNOUT_PCT > 0 ? (previousRecord.REG_VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A') : 'N/A';
     const previousRegPct = previousRecord ? (previousRecord.REG_VOTERS_PCT * 100).toFixed(2) + '%' : 'N/A';
     
     // Format changes
