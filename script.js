@@ -1,7 +1,11 @@
 let mainMap; 
 let icpsrData = []; 
+let icpsrDataMap = {}; // Index for faster lookups
 let countyBoundariesUSA; 
 let selectedCountyFIPS = null;
+let dataLoaded = false;
+let mapInitialized = false;
+
 const stateNames = {
         '01': 'Alabama', '02': 'Alaska', '04': 'Arizona', '05': 'Arkansas',
         '06': 'California', '08': 'Colorado', '09': 'Connecticut', '10': 'Delaware',
@@ -18,12 +22,19 @@ const stateNames = {
         '54': 'West Virginia', '55': 'Wisconsin', '56': 'Wyoming', '72': 'Puerto Rico'
     }; 
 
-// --- Helper function to get a single record from ICPSR data ---
+// --- Helper function to get a single record from ICPSR data using indexed lookup ---
 function getNationalRecord(fipsCode, year) {
-    return icpsrData.find(record => 
-        String(record.STCOFIPS10).padStart(5, '0') === String(fipsCode).padStart(5, '0') && 
-        String(record.YEAR) === String(year)
-    );
+    const key = `${String(fipsCode).padStart(5, '0')}_${year}`;
+    return icpsrDataMap[key];
+}
+
+// --- Build index for faster lookups ---
+function buildDataIndex() {
+    icpsrDataMap = {};
+    for (let record of icpsrData) {
+        const key = `${String(record.STCOFIPS10).padStart(5, '0')}_${record.YEAR}`;
+        icpsrDataMap[key] = record;
+    }
 }
 
 function getTurnoutChanges(fipsCode, currentYear, previousYear) {
@@ -79,28 +90,45 @@ function getChangeColor(change) {
     return '#a50f15'; // Strong Decrease
 }
 
-// Fetch all data
+// Fetch all data with optimized compressed files
 async function fetchData() {
     try {
+        // Show loading indicator
+        const infoDiv = document.getElementById('county-details');
+        infoDiv.innerHTML = '<p>Loading map data...</p>';
+        
+        // Use Promise.all for parallel loading
         const [icpsrResponse, usaBoundariesResponse] = await Promise.all([
-            // 1. New national ICPSR data - UPDATED PATH
-            fetch('/tool/json/voterturnoutdata-ICPSR.json'),
-            // 2. Full USA GeoJSON (for national map) - UPDATED PATH
-            fetch('/tool/json/counties.geojson') 
+            // Use compressed ICPSR data
+            fetch('/tool/json/voterturnoutdata-ICPSR_min.json'),
+            // Use simplified GeoJSON
+            fetch('/tool/json/counties_simplified.geojson') 
         ]);
+        
+        if (!icpsrResponse.ok || !usaBoundariesResponse.ok) {
+            throw new Error('Failed to fetch data files');
+        }
         
         icpsrData = await icpsrResponse.json();
         countyBoundariesUSA = await usaBoundariesResponse.json();
-
+        
+        // Build index for faster lookups
+        buildDataIndex();
+        
+        dataLoaded = true;
         initMap();
 
     } catch (error) {
         console.error("Error fetching data:", error);
+        const infoDiv = document.getElementById('county-details');
+        infoDiv.innerHTML = '<p style="color: red;">Error loading map data. Please refresh the page.</p>';
     }
 }
 
 // Initialize the map
 function initMap() {
+    if (mapInitialized) return;
+    
     // --- 1. Initialize USA Map ---
     mainMap = L.map('main-map', { 
         center: [39.8, -98.5], // Center of the US
@@ -118,6 +146,8 @@ function initMap() {
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(mainMap);
 
+    mapInitialized = true;
+    
     // Initial draw of the map
     updateMap();
 
@@ -204,54 +234,65 @@ function highlightCounty(fipsCode) {
     updateMap();
 }
 
-// Update map function
+// Update map function with debouncing for performance
+let updateMapTimeout;
 function updateMap() {
+    // Debounce rapid updates
+    clearTimeout(updateMapTimeout);
+    updateMapTimeout = setTimeout(() => {
+        if (!mapInitialized || !dataLoaded) return;
+        
+        mainMap.eachLayer(layer => {
+            if (layer instanceof L.GeoJSON) {
+                mainMap.removeLayer(layer);
+            }
+        });
 
-    mainMap.eachLayer(layer => {
-        if (layer instanceof L.GeoJSON) {
-            mainMap.removeLayer(layer);
-        }
-    });
+        const currentYear = document.getElementById('current-year').value;
+        const previousYear = document.getElementById('previous-year').value;
 
-    const currentYear = document.getElementById('current-year').value;
-    const previousYear = document.getElementById('previous-year').value;
+        L.geoJSON(countyBoundariesUSA, {
+            style: function(feature) {
+                const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
+                const change = getTurnoutChange(fipsCode, currentYear, previousYear); 
+                const isSelected = fipsCode === selectedCountyFIPS;
 
-    L.geoJSON(countyBoundariesUSA, {
-        style: function(feature) {
-            const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
-            const change = getTurnoutChange(fipsCode, currentYear, previousYear); 
-            const isSelected = fipsCode === selectedCountyFIPS;
+                return {
+                    fillColor: getChangeColor(change),
+                    weight: isSelected ? 3 : 0.5,
+                    opacity: 1,
+                    color: isSelected ? '#ffff00' : 'white',
+                    fillOpacity: 0.7
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
 
-            return {
-                fillColor: getChangeColor(change),
-                weight: isSelected ? 3 : 0.5,
-                opacity: 1,
-                color: isSelected ? '#ffff00' : 'white',
-                fillOpacity: 0.7
-            };
-        },
-        onEachFeature: function(feature, layer) {
-            const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
+                // ✅ CORRECT: get stateFP from the feature
+                const stateFP = feature.properties.STATEFP;
+                const stateName = stateNames[stateFP] || 'Unknown';
 
-            // ✅ CORRECT: get stateFP from the feature
-            const stateFP = feature.properties.STATEFP;
-            const stateName = stateNames[stateFP] || 'Unknown';
+                const change = getTurnoutChange(fipsCode, currentYear, previousYear);
+                const changeText = change !== null ? (change * 100).toFixed(2) + ' pp' : 'N/A';
 
-            const change = getTurnoutChange(fipsCode, currentYear, previousYear);
-            const changeText = change !== null ? (change * 100).toFixed(2) + ' pp' : 'N/A';
+                // Tooltip with county and state
+                layer.bindTooltip(
+                    `${feature.properties.NAME} County, ${stateName}<br>` +
+                    `Turnout Change (${previousYear} to ${currentYear}): ${changeText}`
+                );
 
-            // Tooltip with county and state
-            layer.bindTooltip(
-                `${feature.properties.NAME} County, ${stateName}<br>` +
-                `Turnout Change (${previousYear} to ${currentYear}): ${changeText}`
-            );
-
-            layer.on('click', function() {
-                highlightCounty(fipsCode);
-            });
-        }
-    }).addTo(mainMap);
+                layer.on('click', function() {
+                    highlightCounty(fipsCode);
+                });
+            }
+        }).addTo(mainMap);
+    }, 100); // Debounce by 100ms
 }
 
 // Initial call to fetch data and start the application
-fetchData();
+// Use defer to ensure DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fetchData);
+} else {
+    fetchData();
+}

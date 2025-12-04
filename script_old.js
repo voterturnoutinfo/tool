@@ -1,314 +1,256 @@
-let currentMap, previousMap, countyBoundaries;
-let voterData = [];
-let selectedCounty = "Indiana"; // Default county is Indiana
-let selectedElectionTypeCurrent = "General"; // For current year
-let selectedElectionTypePrevious = "General"; // For previous year
+let mainMap; 
+let icpsrData = []; 
+let countyBoundariesUSA; 
+let selectedCountyFIPS = null;
+const stateNames = {
+        '01': 'Alabama', '02': 'Alaska', '04': 'Arizona', '05': 'Arkansas',
+        '06': 'California', '08': 'Colorado', '09': 'Connecticut', '10': 'Delaware',
+        '11': 'District of Columbia', '12': 'Florida', '13': 'Georgia', '15': 'Hawaii',
+        '16': 'Idaho', '17': 'Illinois', '18': 'Indiana', '19': 'Iowa',
+        '20': 'Kansas', '21': 'Kentucky', '22': 'Louisiana', '23': 'Maine',
+        '24': 'Maryland', '25': 'Massachusetts', '26': 'Michigan', '27': 'Minnesota',
+        '28': 'Mississippi', '29': 'Missouri', '30': 'Montana', '31': 'Nebraska',
+        '32': 'Nevada', '33': 'New Hampshire', '34': 'New Jersey', '35': 'New Mexico',
+        '36': 'New York', '37': 'North Carolina', '38': 'North Dakota', '39': 'Ohio',
+        '40': 'Oklahoma', '41': 'Oregon', '42': 'Pennsylvania', '44': 'Rhode Island',
+        '45': 'South Carolina', '46': 'South Dakota', '47': 'Tennessee', '48': 'Texas',
+        '49': 'Utah', '50': 'Vermont', '51': 'Virginia', '53': 'Washington',
+        '54': 'West Virginia', '55': 'Wisconsin', '56': 'Wyoming', '72': 'Puerto Rico'
+    }; 
 
-// Fetch voter data and county boundaries
+// --- Helper function to get a single record from ICPSR data ---
+function getNationalRecord(fipsCode, year) {
+    return icpsrData.find(record => 
+        String(record.STCOFIPS10).padStart(5, '0') === String(fipsCode).padStart(5, '0') && 
+        String(record.YEAR) === String(year)
+    );
+}
+
+function getTurnoutChanges(fipsCode, currentYear, previousYear) {
+    const currentRecord = getNationalRecord(fipsCode, currentYear);
+    const previousRecord = getNationalRecord(fipsCode, previousYear);
+
+    if (!currentRecord || !previousRecord) {
+        return null;
+    }
+
+    // Calculate changes for all three metrics
+    const voterTurnoutChange = currentRecord.VOTER_TURNOUT_PCT - previousRecord.VOTER_TURNOUT_PCT;
+    const regVoterTurnoutChange = currentRecord.REG_VOTER_TURNOUT_PCT - previousRecord.REG_VOTER_TURNOUT_PCT;
+    const regVotersPctChange = currentRecord.REG_VOTERS_PCT - previousRecord.REG_VOTERS_PCT;
+
+    return {
+        voterTurnout: voterTurnoutChange,
+        regVoterTurnout: regVoterTurnoutChange,
+        regVotersPct: regVotersPctChange
+    };
+}
+
+function getTurnoutChange(fipsCode, currentYear, previousYear) {
+    const currentRecord = getNationalRecord(fipsCode, currentYear);
+    const previousRecord = getNationalRecord(fipsCode, previousYear);
+
+    if (!currentRecord || !previousRecord) {
+        return null;
+    }
+
+    // VOTER_TURNOUT_PCT is a decimal (e.g., 0.61)
+    const currentTurnout = currentRecord.VOTER_TURNOUT_PCT;
+    const previousTurnout = previousRecord.VOTER_TURNOUT_PCT;
+
+    // Return the change in percentage points (e.g., 0.61 - 0.59 = 0.02)
+    return currentTurnout - previousTurnout;
+}
+
+// --- Helper function to get color based on turnout change ---
+function getChangeColor(change) {
+    if (change === null) return '#c0d8c1'; // Default for no data
+
+    // Convert change to percentage points
+    const changePercent = change * 100;
+
+    // Green for increase, Red for decrease, White/Gray for no change
+    if (changePercent >= 5) return '#00441b'; // Strong Increase
+    if (changePercent >= 2) return '#238b45'; // Moderate Increase
+    if (changePercent >= 0.5) return '#a1d99b'; // Slight Increase
+    if (changePercent > -0.5) return '#f7f7f7'; // Near Zero Change
+    if (changePercent > -2) return '#fcae91'; // Slight Decrease
+    if (changePercent > -5) return '#de2d26'; // Moderate Decrease
+    return '#a50f15'; // Strong Decrease
+}
+
+// Fetch all data
 async function fetchData() {
     try {
-        const [voterResponse, boundariesResponse] = await Promise.all([
-            fetch('voterdata.json'),
-            fetch('indianaCounties.geojson')
+        const [icpsrResponse, usaBoundariesResponse] = await Promise.all([
+            // 1. New national ICPSR data - UPDATED PATH
+            fetch('/tool/json/voterturnoutdata-ICPSR.json'),
+            // 2. Full USA GeoJSON (for national map) - UPDATED PATH
+            fetch('/tool/json/counties.geojson') 
         ]);
         
-        voterData = await voterResponse.json();
-        countyBoundaries = await boundariesResponse.json();
+        icpsrData = await icpsrResponse.json();
+        countyBoundariesUSA = await usaBoundariesResponse.json();
+
+        initMap();
+
     } catch (error) {
         console.error("Error fetching data:", error);
     }
 }
 
-// Function to color counties based on voter turnout
-function getColor(turnout) {
-    let turnoutPercent = parseFloat(turnout.replace('%', ''));
+// Initialize the map
+function initMap() {
+    // --- 1. Initialize USA Map ---
+    mainMap = L.map('main-map', { 
+        center: [39.8, -98.5], // Center of the US
+        zoom: 4,
+        zoomControl: true,
+        scrollWheelZoom: true,
+        dragging: true,
+        touchZoom: true,
+        doubleClickZoom: false, 
+        boxZoom: true,
+        keyboard: true
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mainMap);
+
+    // Initial draw of the map
+    updateMap();
+
+    // Event listeners for year selection
+    document.getElementById('current-year').addEventListener('change', updateMap);
+    document.getElementById('previous-year').addEventListener('change', updateMap);
+}
+
+function displayCountyInfo(fipsCode) {
+    const currentYear = document.getElementById('current-year').value;
+    const previousYear = document.getElementById('previous-year').value;
+    const infoDiv = document.getElementById('county-details');
     
-    if (turnoutPercent >= 80) return '#173e19'; // Darkest green
-    if (turnoutPercent >= 70) return '#205723'; // Dark green
-    if (turnoutPercent >= 60) return '#29702d'; // Medium green
-    if (turnoutPercent >= 50) return '#428a46'; // Light green
-    if (turnoutPercent >= 40) return '#6ca46f'; // Lighter green
-    if (turnoutPercent >= 30) return '#96be98'; // Lightest green
-    return '#c0d8c1'; // Very light green
-}
-
-// Get county data by year, county name, and election type
-function getCountyData(year, countyName, electionType) {
-    return voterData.find(record => 
-        record.Year == year && 
-        record.County === countyName && 
-        record["Election Type"] === electionType
-    );
-}
-
-// Initialize the maps
-function initMaps() {
-    // Current Year Map
-    currentMap = L.map('current-year-map', {
-        center: [39.8, -86.1349],
-        zoom: 7,
-        zoomControl: false,
-        scrollWheelZoom: false,
-        dragging: false,
-        touchZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false
-    });
-
-    // Previous Year Map
-    previousMap = L.map('previous-year-map', {
-        center: [39.8, -86.1349],
-        zoom: 7,
-        zoomControl: false,
-        scrollWheelZoom: false,
-        dragging: false,
-        touchZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false
-    });
-
-    // Add tile layer to both maps
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(currentMap);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(previousMap);
-
-    // Disable any touch events or drag interactions
-    currentMap.touchZoom.disable();
-    currentMap.doubleClickZoom.disable();
-    currentMap.boxZoom.disable();
-    currentMap.keyboard.disable();
-
-    previousMap.touchZoom.disable();
-    previousMap.doubleClickZoom.disable();
-    previousMap.boxZoom.disable();
-    previousMap.keyboard.disable();
-
-    // Function to add county boundaries to a map
-    function addCountyBoundaries(map, year, electionType) {
-        L.geoJSON(countyBoundaries, {
-            style: function(feature) {
-                const countyName = feature.properties.name;
-                const countyData = getCountyData(year, countyName, electionType);
-
-                return {
-                    fillColor: countyData ? getColor(countyData["Turnout (%)"]) : '#c0d8c1',
-                    weight: 1,
-                    opacity: 1,
-                    color: 'white',
-                    fillOpacity: 0.7
-                };
-            },
-            onEachFeature: function(feature, layer) {
-                layer.on('click', function() {
-                    highlightCounty(feature.properties.name);
-                });
-            }
-        }).addTo(map);
-    }
-
-    // Add boundaries for current and previous years
-    const currentYear = document.getElementById('current-year').value;
-    const previousYear = document.getElementById('previous-year').value;
-
-    addCountyBoundaries(currentMap, currentYear, selectedElectionTypeCurrent);
-    addCountyBoundaries(previousMap, previousYear, selectedElectionTypePrevious);
-}
-
-// Display the county information in the info box
-function displayCountyInfo(countyName) {
-    const currentYear = document.getElementById('current-year').value;
-    const previousYear = document.getElementById('previous-year').value;
-
-    // Get current and previous data for the selected election type
-    const currentData = getCountyData(currentYear, countyName, selectedElectionTypeCurrent);
-    const previousData = getCountyData(previousYear, countyName, selectedElectionTypePrevious);
-
-    // Display current year data
-    const currentInfoDiv = document.getElementById('current-year-details');
-    currentInfoDiv.innerHTML = `
-        <h3>${countyName === "Indiana" ? 'Indiana' : `${countyName} County`}: ${currentYear}
-        <div class="button-container">
-        <button id="current-general-btn" class="toggle-button ${selectedElectionTypeCurrent === 'General' ? 'selected' : ''}">General</button>
-        <button id="current-primary-btn" class="toggle-button ${selectedElectionTypeCurrent === 'Primary' ? 'selected' : ''}">Primary</button>
-        </div></h3><br>
-        <strong>Registered Voters:</strong> ${currentData ? currentData["Registered Voters"] : 'N/A'}<br>
-        <strong>Voters Voting:</strong> ${currentData ? currentData["Voters Voting"] : 'N/A'}<br>
-        <strong>Turnout (%):</strong> ${currentData ? currentData["Turnout (%)"] : 'N/A'}<br>
-        <strong>Election Day Vote:</strong> ${currentData ? currentData["Election Day Vote"] : 'N/A'}<br>
-        <strong>Absentee:</strong> ${currentData ? currentData["Absentee"] : 'N/A'}<br>
-        <strong>Absentee (%):</strong> ${currentData ? currentData["Absentee (%)"] : 'N/A'}
-    `;
-
-    // Display previous year data
-    const previousInfoDiv = document.getElementById('previous-year-details');
-    previousInfoDiv.innerHTML = `
-        <h3>${countyName === "Indiana" ? 'Indiana' : `${countyName} County`}: ${previousYear}
-        <div class="button-container">
-        <button id="previous-general-btn" class="toggle-button ${selectedElectionTypePrevious === 'General' ? 'selected' : ''}">General</button>
-        <button id="previous-primary-btn" class="toggle-button ${selectedElectionTypePrevious === 'Primary' ? 'selected' : ''}">Primary</button>
-        </div></h3><br>
-        <strong>Registered Voters:</strong> ${previousData ? previousData["Registered Voters"] : 'N/A'}<br>
-        <strong>Voters Voting:</strong> ${previousData ? previousData["Voters Voting"] : 'N/A'}<br>
-        <strong>Turnout (%):</strong> ${previousData ? previousData["Turnout (%)"] : 'N/A'}<br>
-        <strong>Election Day Vote:</strong> ${previousData ? previousData["Election Day Vote"] : 'N/A'}<br>
-        <strong>Absentee:</strong> ${previousData ? previousData["Absentee"] : 'N/A'}<br>
-        <strong>Absentee (%):</strong> ${previousData ? previousData["Absentee (%)"] : 'N/A'}
-    `;
-
-    // Calculate and display percent change if both data points exist
-    if (currentData && previousData) {
-        const registeredVotersChange = Intl.NumberFormat().format(parseInt(currentData["Registered Voters"].replace(/,/g, '')) - parseInt(previousData["Registered Voters"].replace(/,/g, '')));
-        const votersVotingChange = Intl.NumberFormat().format(parseInt(currentData["Voters Voting"].replace(/,/g, '')) - parseInt(previousData["Voters Voting"].replace(/,/g, '')));
-        const electionDayVoteChange = Intl.NumberFormat().format(parseInt(currentData["Election Day Vote"].replace(/,/g, '')) - parseInt(previousData["Election Day Vote"].replace(/,/g, '')));
-        const absenteeChange = Intl.NumberFormat().format(parseInt(currentData["Absentee"].replace(/,/g, '')) - parseInt(previousData["Absentee"].replace(/,/g, '')));
-        
-        const registeredVotersPercentChange = (((parseInt(currentData["Registered Voters"].replace(/,/g, '')) / parseInt(previousData["Registered Voters"].replace(/,/g, ''))) - 1) * 100).toFixed(2);
-        const votersVotingPercentChange = (((parseInt(currentData["Voters Voting"].replace(/,/g, '')) / parseInt(previousData["Voters Voting"].replace(/,/g, ''))) - 1) * 100).toFixed(2);
-        const turnoutPercentChange = (((parseInt(currentData["Turnout (%)"].replace(/,/g, '')) / parseInt(previousData["Turnout (%)"].replace(/,/g, ''))) - 1) * 100).toFixed(2);
-        const electionDayVotePercentChange = (((parseInt(currentData["Election Day Vote"].replace(/,/g, '')) / parseInt(previousData["Election Day Vote"].replace(/,/g, ''))) - 1) * 100).toFixed(2);
-        const absenteePercentChange = (((parseInt(currentData["Absentee"].replace(/,/g, '')) / parseInt(previousData["Absentee"].replace(/,/g, ''))) - 1) * 100).toFixed(2);
-        const absenteePercentPercentChange = (((parseInt(currentData["Absentee (%)"].replace(/,/g, '')) / parseInt(previousData["Absentee (%)"].replace(/,/g, ''))) - 1) * 100).toFixed(2);
-
-        document.getElementById('percent-change-details').innerHTML = `
-            <h3>${countyName === "Indiana" ? 'Indiana' : `${countyName} County`}<br>
-            ${previousYear} ${selectedElectionTypePrevious} to ${currentYear} ${selectedElectionTypeCurrent}</h3><br>
-            <strong>Registered Voters (Percent Change):</strong> ${registeredVotersChange} (${registeredVotersPercentChange}%)<br>
-            <strong>Voters Voting (Percent Change):</strong> ${votersVotingChange} (${votersVotingPercentChange}%)<br>
-            <strong>Turnout Percent:</strong> ${turnoutPercentChange}%<br>
-            <strong>Election Day Vote (Percent Change):</strong> ${electionDayVoteChange} (${electionDayVotePercentChange}%)<br>
-            <strong>Absentee (Percent Change):</strong> ${absenteeChange} (${absenteePercentChange}%) <br>
-            <strong>Absentee Percent Change:</strong> ${absenteePercentPercentChange}%<br>
-        `;
-    }
-
-    // Attach event listeners to the buttons
-    document.getElementById('current-general-btn').addEventListener('click', () => {
-        selectedElectionTypeCurrent = "General";
-        updateMap();
-        displayCountyInfo(selectedCounty);
-    });
-
-    document.getElementById('current-primary-btn').addEventListener('click', () => {
-        selectedElectionTypeCurrent = "Primary";
-        updateMap();
-        displayCountyInfo(selectedCounty);
-    });
-
-    document.getElementById('previous-general-btn').addEventListener('click', () => {
-        selectedElectionTypePrevious = "General";
-        updateMap();
-        displayCountyInfo(selectedCounty);
-    });
-
-    document.getElementById('previous-primary-btn').addEventListener('click', () => {
-        selectedElectionTypePrevious = "Primary";
-        updateMap();
-        displayCountyInfo(selectedCounty);
-    });
-}
-
-// Highlight county function
-function highlightCounty(countyName) {
-    // Reset if same county is clicked
-    if (selectedCounty === countyName) {
-        selectedCounty = "Indiana";
-        selectedElectionTypeCurrent = "General";
-        selectedElectionTypePrevious = "General";
-        updateMap();
-        displayCountyInfo("Indiana");
+    if (!fipsCode) {
+        infoDiv.innerHTML = `<h2>Click a County for Details</h2>
+            <p>Map shows the percentage point change in Voter Turnout (VAP) between the selected years.</p>`;
         return;
     }
 
-    // Redraw maps with highlighted county
-    function updateCountyStyle(map, year, electionType) {
-        map.eachLayer(layer => {
-            if (layer instanceof L.GeoJSON) {
-                layer.setStyle(function(feature) {
-                    const currentName = feature.properties.name;
-                    const isSelectedCounty = currentName === countyName;
-                    const countyData = getCountyData(year, currentName, electionType);
+    const currentRecord = getNationalRecord(fipsCode, currentYear);
+    const previousRecord = getNationalRecord(fipsCode, previousYear);
+    const changes = getTurnoutChanges(fipsCode, currentYear, previousYear);
 
-                    return {
-                        fillColor: countyData ? getColor(countyData["Turnout (%)"]) : '#c0d8c1',
-                        weight: isSelectedCounty ? 3 : 1,
-                        color: isSelectedCounty ? '#ffff00' : 'white',
-                        fillOpacity: isSelectedCounty ? 0.9 : 0.7
-                    };
-                });
-            }
-        });
-    }
+    // Get county and state names from GeoJSON
+    const countyFeature = countyBoundariesUSA.features.find(f => 
+        (f.properties.STATEFP + f.properties.COUNTYFP) === fipsCode
+    );
+    
+    const countyName = countyFeature ? countyFeature.properties.NAME : 'Unknown';
+    const stateFP = fipsCode.substring(0, 2); // First 2 digits are state FIPS
+    
+    const stateName = stateNames[stateFP] || 'Unknown';
+    
+    const currentTurnout = currentRecord ? (currentRecord.VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const currentRegTurnout = currentRecord ? (currentRecord.REG_VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const currentRegPct = currentRecord ? (currentRecord.REG_VOTERS_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const previousTurnout = previousRecord ? (previousRecord.VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const previousRegTurnout = previousRecord ? (previousRecord.REG_VOTER_TURNOUT_PCT * 100).toFixed(2) + '%' : 'N/A';
+    const previousRegPct = previousRecord ? (previousRecord.REG_VOTERS_PCT * 100).toFixed(2) + '%' : 'N/A';
+    
+    // Format changes
+    const voterTurnoutChangeText = changes ? (changes.voterTurnout * 100).toFixed(2) + ' pp' : 'N/A';
+    const regVoterTurnoutChangeText = changes ? (changes.regVoterTurnout * 100).toFixed(2) + ' pp' : 'N/A';
+    const regVotersPctChangeText = changes ? (changes.regVotersPct * 100).toFixed(2) + ' pp' : 'N/A';
 
-    const currentYear = document.getElementById('current-year').value;
-    const previousYear = document.getElementById('previous-year').value;
+    infoDiv.innerHTML = `
+        <h2>${countyName} County, ${stateName}</h2>
+        
+        <h3>Turnout Comparison</h3>
+        <br>
 
-    updateCountyStyle(currentMap, currentYear, selectedElectionTypeCurrent);
-    updateCountyStyle(previousMap, previousYear, selectedElectionTypePrevious);
+        <p><strong>${previousYear}:</strong>
+        &nbsp;&nbsp;• Percent of Voting Age Registered: ${previousRegPct}<br>
+        &nbsp;&nbsp;• Voter Turnout (VAP): ${previousTurnout}<br>
+        &nbsp;&nbsp;• Registered Voter Turnout: ${previousRegTurnout}</p>
 
-    selectedCounty = countyName;
-    displayCountyInfo(countyName);
+        <p><strong>${currentYear}:</strong>
+        &nbsp;&nbsp;• Percent of Voting Age Registered: ${currentRegPct}<br>
+        &nbsp;&nbsp;• Voter Turnout (VAP): ${currentTurnout}<br>
+        &nbsp;&nbsp;• Registered Voter Turnout: ${currentRegTurnout}</p>
+        
+        <p><strong>Change (${previousYear} to ${currentYear}):</strong>
+        &nbsp;&nbsp;• Percent Registered: ${regVotersPctChangeText}<br>
+        &nbsp;&nbsp;• Voter Turnout (VAP): ${voterTurnoutChangeText}<br>
+        &nbsp;&nbsp;• Registered Voter Turnout: ${regVoterTurnoutChangeText}</p>
+        <br>
+
+        <h3>Partisan Index (${currentYear})</h3>
+        <p><strong>Partisan Index (Dem):</strong> ${currentRecord ? (currentRecord.PARTISAN_INDEX_DEM * 100).toFixed(2) + '%' : 'N/A'}</p>
+        <p><strong>Partisan Index (Rep):</strong> ${currentRecord ? (currentRecord.PARTISAN_INDEX_REP * 100).toFixed(2) + '%' : 'N/A'}</p>
+    `;
 }
 
-// Update the maps when a new year is selected
+// Highlight county function
+function highlightCounty(fipsCode) {
+    // Reset if same county is clicked
+    if (selectedCountyFIPS === fipsCode) {
+        selectedCountyFIPS = null;
+        displayCountyInfo(null);
+    } else {
+        selectedCountyFIPS = fipsCode;
+        displayCountyInfo(fipsCode);
+    }
+    updateMap();
+}
+
+// Update map function
 function updateMap() {
+
+    mainMap.eachLayer(layer => {
+        if (layer instanceof L.GeoJSON) {
+            mainMap.removeLayer(layer);
+        }
+    });
+
     const currentYear = document.getElementById('current-year').value;
     const previousYear = document.getElementById('previous-year').value;
 
-    // Remove existing layers
-    currentMap.eachLayer(layer => {
-        if (layer instanceof L.GeoJSON) {
-            currentMap.removeLayer(layer);
+    L.geoJSON(countyBoundariesUSA, {
+        style: function(feature) {
+            const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
+            const change = getTurnoutChange(fipsCode, currentYear, previousYear); 
+            const isSelected = fipsCode === selectedCountyFIPS;
+
+            return {
+                fillColor: getChangeColor(change),
+                weight: isSelected ? 3 : 0.5,
+                opacity: 1,
+                color: isSelected ? '#ffff00' : 'white',
+                fillOpacity: 0.7
+            };
+        },
+        onEachFeature: function(feature, layer) {
+            const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
+
+            const stateFP = feature.properties.STATEFP;
+            const stateName = stateNames[stateFP] || 'Unknown';
+
+            const change = getTurnoutChange(fipsCode, currentYear, previousYear);
+            const changeText = change !== null ? (change * 100).toFixed(2) + ' pp' : 'N/A';
+
+            // Tooltip with county and state
+            layer.bindTooltip(
+                `${feature.properties.NAME} County, ${stateName}<br>` +
+                `Turnout Change (${previousYear} to ${currentYear}): ${changeText}`
+            );
+
+            layer.on('click', function() {
+                highlightCounty(fipsCode);
+            });
         }
-    });
-    previousMap.eachLayer(layer => {
-        if (layer instanceof L.GeoJSON) {
-            previousMap.removeLayer(layer);
-        }
-    });
-
-    // Reinitialize county boundaries with new years
-    function addCountyBoundaries(map, year, electionType) {
-        L.geoJSON(countyBoundaries, {
-            style: function(feature) {
-                const countyName = feature.properties.name;
-                const countyData = getCountyData(year, countyName, electionType);
-                const isSelectedCounty = countyName === selectedCounty;
-
-                return {
-                    fillColor: countyData ? getColor(countyData["Turnout (%)"]) : '#c0d8c1',
-                    weight: isSelectedCounty ? 3 : 1,
-                    color: isSelectedCounty ? '#ffff00' : 'white',
-                    fillOpacity: isSelectedCounty ? 0.9 : 0.7
-                };
-            },
-            onEachFeature: function(feature, layer) {
-                layer.on('click', function() {
-                    highlightCounty(feature.properties.name);
-                });
-            }
-        }).addTo(map);
-    }
-
-    addCountyBoundaries(currentMap, currentYear, selectedElectionTypeCurrent);
-    addCountyBoundaries(previousMap, previousYear, selectedElectionTypePrevious);
-
-    // Keep the selected county's information displayed
-    displayCountyInfo(selectedCounty);
+    }).addTo(mainMap);
 }
 
-// Initialize everything
-document.addEventListener('DOMContentLoaded', async () => {
-    await fetchData();
-    initMaps();
-    displayCountyInfo("Indiana");
-});
-
-// Event listeners for year changes
-document.getElementById('current-year').addEventListener('change', updateMap);
-document.getElementById('previous-year').addEventListener('change', updateMap);
+// Initial call to fetch data and start the application
+fetchData();

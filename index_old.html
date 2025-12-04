@@ -12,74 +12,80 @@
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indiana Voter Turnout Maps</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <title>Voter Turnout</title>
+    
+    <!-- Corrected CSS path for GitHub Pages -->
+    <link rel="stylesheet" href="/tool/css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
+    
+    <!-- FIX: Add a style block to ensure the map container has a height -->
+    <style>
+        #main-map {
+            height: 600px; /* Explicitly set height for the map container */
+            width: 100%;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Indiana Voter Turnout Comparison</h1>
+        <h1>USA Voter Turnout Comparison by County</h1>
 
         <div class="map-container">
-            <div id="previous-year-map" class="map"></div>
+            <!-- The main map container is now for the USA map -->
+            <div id="main-map" class="map"></div>
+            
             <div class="legend">
-                <h3>Voter Turnout</h3>
-
+                <h3>Turnout Change (%)</h3>
+                <!-- New Legend for Change in Turnout -->
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #173e19;"></div>
-                    <span>> 80%</span>
+                    <div class="color-box" style="background-color: #00441b;"></div>
+                    <span>+5% or more (Increase)</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #205723;"></div>
-                    <span>> 70%</span>
+                    <div class="color-box" style="background-color: #238b45;"></div>
+                    <span>+2% to +5%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #29702d;"></div>
-                    <span>> 60%</span>
+                    <div class="color-box" style="background-color: #a1d99b;"></div>
+                    <span>+0.5% to +2%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #428a46;"></div>
-                    <span>> 50%</span>
+                    <div class="color-box" style="background-color: #f7f7f7;"></div>
+                    <span>-0.5% to +0.5% (No Change)</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #6ca46f;"></div>
-                    <span>> 40%</span>
+                    <div class="color-box" style="background-color: #fcae91;"></div>
+                    <span>-2% to -0.5%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #96be98;"></div>
-                    <span>> 30%</span>
+                    <div class="color-box" style="background-color: #de2d26;"></div>
+                    <span>-5% to -2%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #c0d8c1;"></div>
-                    <span>under 30%</span>
+                    <div class="color-box" style="background-color: #a50f15;"></div>
+                    <span>-5% or more (Decrease)</span>
                 </div>
-
             </div>
-            <div id="current-year-map" class="map"></div>
         </div>
 
         <div class="year-selectors">
             <div>
                 <label for="previous-year">Previous Year:</label>
                 <select id="previous-year">
-                    <option value="2024">2024</option>
-                    <option value="2022" selected>2022</option>
                     <option value="2020">2020</option>
                     <option value="2018">2018</option>
-                    <option value="2016">2016</option>
+                    <option value="2016"selected>2016</option>
                     <option value="2014">2014</option>
                     <option value="2012">2012</option>
                     <option value="2010">2010</option>
                 </select>
             </div>
-            <div class="instructions">Select a County for more info <br>
-            Click the same county again to go back to the State level</div>
+            <div class="instructions">Select two years to compare turnout change.</div>
             <div>
                 <label for="current-year">Current Year:</label>
                 <select id="current-year">
-                    <option value="2024" selected>2024</option>
                     <option value="2022">2022</option>
-                    <option value="2020">2020</option>
+                    <option value="2020"selected>2020</option>
                     <option value="2018">2018</option>
                     <option value="2016">2016</option>
                     <option value="2014">2014</option>
@@ -89,31 +95,20 @@
             </div>
         </div>
         
+        <!-- The info container is now simplified to show the comparison details -->
         <div class="info-container">
-            <div id="previous-year-details" class="info-box">
-                <h2>Select a County</h2>
-                <div class="button-container">
-                    <button id="general-btn" class="toggle-button selected">General</button>
-                    <button id="primary-btn" class="toggle-button">Primary</button>
-                  </div>
-                
-            </div>
-            <div id="percent-change-details" class="info-box">
-                <h2>Select a County</h2>
-            </div>
-            <div id="current-year-details" class="info-box">
-                <h2>Select a County</h2>
-                <div class="button-container">
-                    <button id="general-btn" class="toggle-button selected">General</button>
-                    <button id="primary-btn" class="toggle-button">Primary</button>
-                  </div>
-                
+            <div id="county-details" class="info-box">
+                <h2>Click a County for Details</h2>
+                <p>Map shows the percentage point change in Voter Turnout (VAP) between the selected years.</p>
             </div>
         </div>
+        
         <div>
-            <h2><br>Indiana Voter Turnout Maps</h2>
-            <p>These maps show the voter turnout for the general and primary elections in Indiana for the selected years. The darker the shade of green, the higher the voter turnout. Click on a county to see more information about the voter turnout for that county.</p>
-            <p>Source: <a href="https://indianavoters.in.gov/ENRHistorical/ElectionResults">Indiana Secretary of State</a></p>
+            <!-- <h2>USA County Voter Turnout Comparison</h2> -->
+            <br>
+            <br>
+            <p>This map shows the change in voter turnout for counties across the United States between the two selected years. Green indicates an increase in turnout, while red indicates a decrease. Data is based on the Voting Age Population (VAP).</p>
+            <p>Source: <a href="https://www.icpsr.umich.edu/web/ICPSR/studies/38506/summary">ICPSR/NaNDA: Voter Registration, Turnout, and Partisanship by County, United States</a></p>
             <p>Questions? <a href="mailto:voterturnoutinfo@gmail.com">email us</a></p>
         </div>
     </div>

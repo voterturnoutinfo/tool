@@ -14,6 +14,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voter Turnout</title>
     
+    <!-- Preconnect to external resources for faster loading -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preconnect" href="https://tile.openstreetmap.org">
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+    
     <!-- Corrected CSS path for GitHub Pages -->
     <link rel="stylesheet" href="/tool/css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
@@ -23,6 +28,18 @@
         #main-map {
             height: 600px; /* Explicitly set height for the map container */
             width: 100%;
+        }
+        
+        /* Loading indicator */
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .loading-indicator.active {
+            display: block;
         }
     </style>
 </head>
@@ -113,7 +130,9 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
-    <script src="script.js"></script>
+    <!-- Load Leaflet library asynchronously -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js" defer></script>
+    <!-- Load the optimized script with defer for non-blocking execution -->
+    <script src="script_optimized.js" defer></script>
 </body>
 </html>
