@@ -84,9 +84,9 @@ async function fetchData() {
     try {
         const [icpsrResponse, usaBoundariesResponse] = await Promise.all([
             // 1. New national ICPSR data - UPDATED PATH
-            fetch('/VoterTurnout/json/voterturnoutdata-ICPSR.json'),
+            fetch('/tool/json/voterturnoutdata-ICPSR.json'),
             // 2. Full USA GeoJSON (for national map) - UPDATED PATH
-            fetch('/VoterTurnout/json/counties.geojson') 
+            fetch('/tool/json/counties.geojson') 
         ]);
         
         icpsrData = await icpsrResponse.json();
