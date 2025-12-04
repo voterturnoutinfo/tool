@@ -143,7 +143,9 @@ function initMap() {
         touchZoom: true,
         doubleClickZoom: false, 
         boxZoom: true,
-        keyboard: true
+        keyboard: true,
+        tap: true, // Enable tap for mobile
+        tapTolerance: 20 // Increase tap tolerance for easier mobile selection (default is 15)
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -303,11 +305,39 @@ function updateMap() {
                 // Tooltip with county and state
                 layer.bindTooltip(
                     `<strong>${feature.properties.NAME} County, ${stateName}</strong><br>` +
-                    `Change (${previousYear} to ${currentYear}): <strong>${changeText}</strong>`
+                    `Change (${previousYear} → ${currentYear}): <strong>${changeText}</strong>`,
+                    {
+                        sticky: true, // Follow cursor/touch
+                        opacity: 0.9
+                    }
                 );
 
-                layer.on('click', function() {
+                // Mobile-friendly click/tap handlers
+                layer.on('click touchend', function(e) {
+                    // Prevent default touch behavior
+                    if (e.type === 'touchend') {
+                        e.originalEvent.preventDefault();
+                    }
                     highlightCounty(fipsCode);
+                });
+                
+                // Hover effect for desktop (visual feedback)
+                layer.on('mouseover', function() {
+                    if (!L.Browser.mobile) {
+                        layer.setStyle({
+                            weight: 2,
+                            color: '#666'
+                        });
+                    }
+                });
+                
+                layer.on('mouseout', function() {
+                    if (!L.Browser.mobile && fipsCode !== selectedCountyFIPS) {
+                        layer.setStyle({
+                            weight: 0.5,
+                            color: 'white'
+                        });
+                    }
                 });
                 
                 // Add striped pattern for N/A counties
