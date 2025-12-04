@@ -100,9 +100,9 @@ async function fetchData() {
         // Use Promise.all for parallel loading
         const [icpsrResponse, usaBoundariesResponse] = await Promise.all([
             // Use compressed ICPSR data
-            fetch('/tool/json/voterturnoutdata-ICPSR_min.json'),
+            fetch('/tool/json/voterturnoutdata-ICPSR.json'),
             // Use simplified GeoJSON
-            fetch('/tool/json/counties_simplified.geojson') 
+            fetch('/tool/json/counties.geojson') 
         ]);
         
         if (!icpsrResponse.ok || !usaBoundariesResponse.ok) {
