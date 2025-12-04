@@ -303,7 +303,7 @@ function updateMap() {
                 // Tooltip with county and state
                 layer.bindTooltip(
                     `<strong>${feature.properties.NAME} County, ${stateName}</strong><br>` +
-                    `Change (${previousYear} → ${currentYear}): <strong>${changeText}</strong>`
+                    `Change (${previousYear} to ${currentYear}): <strong>${changeText}</strong>`
                 );
 
                 layer.on('click', function() {
