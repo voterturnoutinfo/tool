@@ -144,8 +144,8 @@ function initMap() {
         doubleClickZoom: false, 
         boxZoom: true,
         keyboard: true,
-        tap: true, // Enable tap for mobile
-        tapTolerance: 20 // Increase tap tolerance for easier mobile selection (default is 15)
+        tap: true, 
+        tapTolerance: 25 
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -245,9 +245,7 @@ function displayCountyInfo(fipsCode) {
     `;
 }
 
-// Highlight county function
 function highlightCounty(fipsCode) {
-    // Reset if same county is clicked
     if (selectedCountyFIPS === fipsCode) {
         selectedCountyFIPS = null;
         displayCountyInfo(null);
@@ -258,10 +256,8 @@ function highlightCounty(fipsCode) {
     updateMap();
 }
 
-// Update map function with debouncing for performance
 let updateMapTimeout;
 function updateMap() {
-    // Debounce rapid updates
     clearTimeout(updateMapTimeout);
     updateMapTimeout = setTimeout(() => {
         if (!mapInitialized || !dataLoaded) return;
@@ -295,7 +291,6 @@ function updateMap() {
             onEachFeature: function(feature, layer) {
                 const fipsCode = feature.properties.STATEFP + feature.properties.COUNTYFP;
 
-                // ✅ CORRECT: get stateFP from the feature
                 const stateFP = feature.properties.STATEFP;
                 const stateName = stateNames[stateFP] || 'Unknown';
 
@@ -307,17 +302,18 @@ function updateMap() {
                     `<strong>${feature.properties.NAME} County, ${stateName}</strong><br>` +
                     `Change (${previousYear} → ${currentYear}): <strong>${changeText}</strong>`,
                     {
-                        sticky: true, // Follow cursor/touch
+                        sticky: true, 
                         opacity: 0.9
                     }
                 );
 
-                // Mobile-friendly click/tap handlers
-                layer.on('click touchend', function(e) {
-                    // Prevent default touch behavior
-                    if (e.type === 'touchend') {
-                        e.originalEvent.preventDefault();
-                    }
+                layer.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    highlightCounty(fipsCode);
+                });
+
+                layer.on('touchend', function(e) {
+                    L.DomEvent.stop(e);
                     highlightCounty(fipsCode);
                 });
                 
@@ -351,11 +347,10 @@ function updateMap() {
                 }
             }
         }).addTo(mainMap);
-    }, 100); // Debounce by 100ms
+    }, 100); 
 }
 
-// Initial call to fetch data and start the application
-// Use defer to ensure DOM is ready
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', fetchData);
 } else {
