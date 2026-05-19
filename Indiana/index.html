@@ -19,38 +19,59 @@
 <body>
     <div class="container">
         <h1>Indiana Voter Turnout Comparison</h1>
-
+            <!-- if (turnoutPercent >= 90) return '#031302';
+                if (turnoutPercent >= 80) return '#041f03';
+                if (turnoutPercent >= 70) return '#062e05';
+                if (turnoutPercent >= 60) return '#0b5109'; 
+                if (turnoutPercent >= 50) return '#0f710c'; 
+                if (turnoutPercent >= 40) return '#149310'; 
+                if (turnoutPercent >= 30) return '#2fb82a'; 
+                if (turnoutPercent >= 20) return '#98dc96'; 
+                if (turnoutPercent >= 10) return '#b6e6b5'; 
+                return '#d1efd0';  -->
         <div class="map-container">
             <div id="previous-year-map" class="map"></div>
             <div class="legend">
                 <h3>Voter Turnout</h3>
 
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #173e19;"></div>
+                    <div class="color-box" style="background-color: #031302;"></div>
+                    <span>> 90%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background-color: #041f03;"></div>
+                    <span>> 80%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background-color: #062e05;"></div>
+                    <span>> 70%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box" style="background-color: #0b5109;"></div>
                     <span>> 60%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #205723;"></div>
+                    <div class="color-box" style="background-color: #0f710c;"></div>
                     <span>> 50%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #29702d;"></div>
+                    <div class="color-box" style="background-color: #149310;"></div>
                     <span>> 40%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #428a46;"></div>
+                    <div class="color-box" style="background-color: #2fb82a;"></div>
                     <span>> 30%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #6ca46f;"></div>
+                    <div class="color-box" style="background-color: #98dc96;"></div>
                     <span>> 20%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #96be98;"></div>
+                    <div class="color-box" style="background-color: #b6e6b5;"></div>
                     <span>> 10%</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: #c0d8c1;"></div>
+                    <div class="color-box" style="background-color: #d1efd0;"></div>
                     <span>under 10%</span>
                 </div>
 

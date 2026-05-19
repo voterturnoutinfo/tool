@@ -23,13 +23,16 @@ async function fetchData() {
 function getColor(turnout) {
     let turnoutPercent = parseFloat(turnout.replace('%', ''));
     
-    if (turnoutPercent >= 60) return '#173e19'; // Darkest green
-    if (turnoutPercent >= 50) return '#205723'; // Dark green
-    if (turnoutPercent >= 40) return '#29702d'; // Medium green
-    if (turnoutPercent >= 30) return '#428a46'; // Light green
-    if (turnoutPercent >= 20) return '#6ca46f'; // Lighter green
-    if (turnoutPercent >= 10) return '#96be98'; // Lightest green
-    return '#c0d8c1'; // Very light green
+    if (turnoutPercent >= 90) return '#031302';
+    if (turnoutPercent >= 80) return '#041f03';
+    if (turnoutPercent >= 70) return '#062e05';
+    if (turnoutPercent >= 60) return '#0b5109'; 
+    if (turnoutPercent >= 50) return '#0f710c'; 
+    if (turnoutPercent >= 40) return '#149310'; 
+    if (turnoutPercent >= 30) return '#2fb82a'; 
+    if (turnoutPercent >= 20) return '#98dc96'; 
+    if (turnoutPercent >= 10) return '#b6e6b5'; 
+    return '#d1efd0'; 
 }
 
 // Get county data by year, county name, and election type
