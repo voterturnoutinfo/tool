@@ -23,12 +23,12 @@ async function fetchData() {
 function getColor(turnout) {
     let turnoutPercent = parseFloat(turnout.replace('%', ''));
     
-    if (turnoutPercent >= 80) return '#173e19'; // Darkest green
-    if (turnoutPercent >= 70) return '#205723'; // Dark green
-    if (turnoutPercent >= 60) return '#29702d'; // Medium green
-    if (turnoutPercent >= 50) return '#428a46'; // Light green
-    if (turnoutPercent >= 40) return '#6ca46f'; // Lighter green
-    if (turnoutPercent >= 30) return '#96be98'; // Lightest green
+    if (turnoutPercent >= 35) return '#173e19'; // Darkest green
+    if (turnoutPercent >= 30) return '#205723'; // Dark green
+    if (turnoutPercent >= 25) return '#29702d'; // Medium green
+    if (turnoutPercent >= 20) return '#428a46'; // Light green
+    if (turnoutPercent >= 15) return '#6ca46f'; // Lighter green
+    if (turnoutPercent >= 10) return '#96be98'; // Lightest green
     return '#c0d8c1'; // Very light green
 }
 
